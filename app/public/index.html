@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>localhost</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <style>
+        #map { height: 90vh; }
+        #client-point { font-size: 1.2em; color: #3462e1; }
+        #client-result { font-size: 1.2em; margin: 1em 0; }
+    </style>
+</head>
+<body>
+    <h2>
+        Buffer em <span style="color:blueviolet">rota</span> linestring para gerar <span style="color:blue">geocerca</span>
+    </h2>
+    <div id="client-point">Aguardando geolocalização...</div>
+    <div id="client-result"></div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    <script>
+        let map = L.map('map').setView([-23.504243, -46.847387], 16);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        let routeLayer, bufferLayer, lastClientLayer = null, clientRouteLayer = null;
+
+        var greenIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        fetch('http://localhost:3001/geofence')
+            .then(res => res.json())
+            .then(data => {
+                routeLayer = L.geoJSON(data.route, {
+                    style: { color: 'purple', weight: 4, dashArray: '5, 5' }
+                }).addTo(map);
+                bufferLayer = L.geoJSON(data.buffer, {
+                    style: { color: 'blue', fillOpacity: 0.2 }
+                }).addTo(map);
+
+                map.fitBounds(bufferLayer.getBounds());
+            });
+
+        function pollClientPoint() {
+            fetch('http://localhost:3001/client-last-point')
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.lat || !data.lng) return;
+                    document.getElementById('client-point').innerHTML =
+                        `<b>Geoposição enviada:</b> (${data.lat.toFixed(6)}, ${data.lng.toFixed(6)})`;
+                    
+                    if (lastClientLayer) map.removeLayer(lastClientLayer);
+                    lastClientLayer = L.marker([data.lat, data.lng], { icon: greenIcon }).addTo(map);
+
+                    // Consulta /check-geofence para saber se está dentro do buffer
+                    fetch('http://localhost:3001/check-geofence', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ lat: data.lat, lng: data.lng })
+                    })
+                    .then(res => res.json())
+                    .then(resData => {
+                        document.getElementById('client-result').innerHTML =
+                            `<span style="color:${resData.inside ? 'green' : 'red'};font-weight:bold">
+                                Dentro da geocerca: ${resData.inside ? 'SIM' : 'NÃO'}
+                            </span>`;
+                    });
+                });
+
+            fetch('http://localhost:3001/client-history')
+                .then(res => res.json())
+                .then(history => {
+                    if (!Array.isArray(history) || history.length < 2) {
+                        if (clientRouteLayer) { map.removeLayer(clientRouteLayer); clientRouteLayer = null; }
+                        return;
+                    }
+                    const latlngs = history.map(pt => [pt.lat, pt.lng]);
+                    if (clientRouteLayer) map.removeLayer(clientRouteLayer);
+                    clientRouteLayer = L.polyline(latlngs, { color: 'green', weight: 4 }).addTo(map);
+                });
+        }
+
+        setInterval(pollClientPoint, 500); 
+    </script>
+</body>
+</html>
