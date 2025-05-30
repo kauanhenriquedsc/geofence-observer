@@ -40,13 +40,14 @@
         });
 
         fetch('http://localhost:3001/geofence')
+
             .then(res => res.json())
             .then(data => {
                 routeLayer = L.geoJSON(data.route, {
-                    style: { color: 'purple', weight: 4, dashArray: '5, 5' }
+                    style: { color: 'blue', weight: 4 }
                 }).addTo(map);
                 bufferLayer = L.geoJSON(data.buffer, {
-                    style: { color: 'blue', fillOpacity: 0.2 }
+                    style: { color: 'blue', fillOpacity: 0.1 }
                 }).addTo(map);
 
                 map.fitBounds(bufferLayer.getBounds());
@@ -63,7 +64,6 @@
                     if (lastClientLayer) map.removeLayer(lastClientLayer);
                     lastClientLayer = L.marker([data.lat, data.lng], { icon: greenIcon }).addTo(map);
 
-                    // Consulta /check-geofence para saber se está dentro do buffer
                     fetch('http://localhost:3001/check-geofence', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},

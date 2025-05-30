@@ -60,4 +60,4 @@ function clientRoute(intervalMs = 1000) {
 // }
 
 
-clientRoute(500); 
+clientRoute(250); 
